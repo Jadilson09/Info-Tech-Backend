@@ -1,20 +1,17 @@
 import { DatabaseModel } from "./model/DatabaseModel.js";
 import { server } from "./server.js";
 
-const port: number = 3333; //Define a porta que o servidor vai executar
+const port: number = Number(process.env.PORT) || 3333; //Define a porta que o servidor vai executar
 
-//Liga o servidor HTTP
-server.listen(port, () => {
-    console.log(`Servidor executando no endereço: http://localhost:${port}`);
-});
-
-// No momento, a verificação de conexão com o banco de dados está desativada
+// Testa conexão com o banco e inicia o servidor apenas uma vez
 new DatabaseModel().testeConexao().then((resbd) => {
     if (resbd) {
-        server.listen(port, () => {
-            console.log(`Servidor rodando em http://localhost:${port}`);
-        })
+        console.log('Conexão com o banco estabelecida');
     } else {
-        console.log('Não foi possível conectar ao banco de dados');
+        console.log('Não foi possível conectar ao banco de dados (continuando sem DB)');
     }
+
+    server.listen(port, () => {
+        console.log(`Servidor executando no endereço: http://localhost:${port}`);
+    });
 });

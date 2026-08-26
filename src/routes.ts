@@ -1,42 +1,33 @@
 import type { Request, Response } from "express";
 import { Router } from "express";
-// Importa o controller de cada classe
+
 import CategoriaController from "./controller/CategoriaController.js";
 import MovimentacaoController from "./controller/MovimentacaoController.js";
 import ProdutoController from "./controller/ProdutoController.js";
-import { Auth } from "./middlewares/Auth.js";
+
+
+import { validate } from "./middlewares/validate.js";
+import { criarProdutoSchema, atualizarProdutoSchema } from "./schemas/produto.schema.js";
 
 const router = Router();
 
-/**
- * Rota raiz da API para teste de conexão
- */
 router.get("/api", (req: Request, res: Response) => {
-    res.status(200).json({ mensagem: "Olá, seja bem-vindo!" });
+  res.status(200).json({ mensagem: "Olá, seja bem-vindo!" });
 });
 
+// Movimentações
+router.get("/api/Movimentacoes", MovimentacaoController.listar);
+router.post("/api/Movimentacoes", MovimentacaoController.criar);
 
-// Retorna a lista com todos os pacientes (Ordem Alfabética)
-router.get("/api/Movimentacoes", Auth.verifyToken ,MovimentacaoController.listar);
-// Insere um novo paciente no banco de dados (rota pública para registro)
-router.post("/api/Movimentacoes", Auth.verifyToken ,MovimentacaoController.criar);
+// Categorias
+router.get("/api/Categorias", CategoriaController.listar);
+router.post("/api/Categorias", CategoriaController.criar);
+router.get("/api/Categorias/:idCategoria", CategoriaController.buscarPorId);
 
-
-
-// Retorna a lista com todos os médicos (Ordem Alfabética)
-router.get("/api/Categorias", Auth.verifyToken ,CategoriaController.listar);
-// Insere um novo médico no banco de dados
-router.post("/api/Categorias", Auth.verifyToken ,CategoriaController.criar);
-// Retorna o médico pelo ID
-router.get("/api/Categorias/:idCategoria", Auth.verifyToken ,CategoriaController.buscarPorId);
-
-
-// Retorna a lista com todas as consultas
-router.get("/api/Produtos", Auth.verifyToken ,ProdutoController.listar);
-// Cadastra uma nova consulta
-router.post("/api/Produtos", Auth.verifyToken ,ProdutoController.criar);
-// Retorna o produto pelo ID
-router.get("/api/Produtos/:idProduto", Auth.verifyToken ,ProdutoController.buscarPorId);
-
+// Produtos
+router.get("/api/Produtos", ProdutoController.listar);
+router.post("/api/Produtos", validate(criarProdutoSchema), ProdutoController.criar);
+router.put("/api/Produtos/:idProduto", validate(atualizarProdutoSchema), ProdutoController.atualizar);
+router.get("/api/Produtos/:idProduto", ProdutoController.buscarPorId);
 
 export { router };

@@ -1,4 +1,8 @@
+import dotenv from 'dotenv';
 import pg from 'pg';
+
+// Carrega variáveis de ambiente antes de criar o Pool
+dotenv.config();
 
 const { Pool } = pg;
 
