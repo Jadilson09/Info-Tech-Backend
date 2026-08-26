@@ -1,105 +1,158 @@
 import type { Request, Response } from 'express';
 import { pool } from '../config/index.js';
+import type { CriarProdutoDTO, AtualizarProdutoDTO } from '../interface/ProdutoDTO.js';
 
 export class ProdutoController {
 
-  // POST /produtos - Cadastrar Produto
+  // POST /api/Produtos - Cadastrar Produto
   async criar(req: Request, res: Response): Promise<Response> {
     try {
-      const {
-        codigo,
-        id_categoria,
-        nome,
-        descricao,
-        quantidade_estoque,
-        quantidade_minima,
-        valor_unitario
-      } = req.body;
+      // Os dados já chegam validados e sanitizados pelo middleware Zod
+      const dados = req.body as CriarProdutoDTO;
+      console.log('ProdutoController.criar chamado com body:', dados);
 
-      // 1. Verificar se todos os campos obrigatórios foram enviados
-      if (
-        !codigo ||
-        !id_categoria ||
-        !nome ||
-        !descricao ||
-        quantidade_estoque === undefined ||
-        quantidade_minima === undefined ||
-        valor_unitario === undefined
-      ) {
-        return res.status(400).json({
-          erro: 'Todos os campos (codigo, id_categoria, nome, descricao, quantidade_estoque, quantidade_minima, valor_unitario) são obrigatórios.'
-        });
-      }
-
-      // 2. Validar formatos e limites dos campos de texto (VARCHARs)
-      if (typeof codigo !== 'string' || codigo.trim().length > 50) {
-        return res.status(400).json({ erro: 'O código deve ser um texto de até 50 caracteres.' });
-      }
-      if (typeof nome !== 'string' || nome.trim().length > 100) {
-        return res.status(400).json({ erro: 'O nome deve ser um texto de até 100 caracteres.' });
-      }
-      if (typeof descricao !== 'string' || descricao.trim().length > 100) {
-        return res.status(400).json({ erro: 'A descrição deve ser um texto de até 100 caracteres.' });
-      }
-
-      // 3. Validar tipos e limites numéricos
-      const catId = Number(id_categoria);
-      const qtdEstoque = Number(quantidade_estoque);
-      const qtdMinima = Number(quantidade_minima);
-      const preco = Number(valor_unitario);
-
-      if (!Number.isInteger(catId) || catId <= 0) {
-        return res.status(400).json({ erro: 'O id_categoria deve ser um número inteiro válido.' });
-      }
-      if (!Number.isInteger(qtdEstoque) || qtdEstoque < 0) {
-        return res.status(400).json({ erro: 'A quantidade de estoque deve ser um número inteiro maior ou igual a zero.' });
-      }
-      if (!Number.isInteger(qtdMinima) || qtdMinima < 0) {
-        return res.status(400).json({ erro: 'A quantidade mínima deve ser um número inteiro maior ou igual a zero.' });
-      }
-      if (isNaN(preco) || preco <= 0) {
-        return res.status(400).json({ erro: 'O valor unitário deve ser um número maior que zero.' });
-      }
-
-      // 4. Conferir se a Categoria informada existe no banco
+      // Validação de Regra de Negócio: Verificar se a Categoria existe no banco
       const categoriaExiste = await pool.query(
         'SELECT id_categoria FROM categoria WHERE id_categoria = $1',
-        [catId]
+        [dados.id_categoria]
       );
+
       if (categoriaExiste.rows.length === 0) {
         return res.status(404).json({ erro: 'A categoria informada não existe.' });
       }
 
-      // 5. Inserir Produto no banco
+      // Mapear campos da API para colunas reais do banco
       const query = `
         INSERT INTO produto 
-        (codigo, id_categoria, nome, descricao, quantidade_estoque, quantidade_minima, valor_unitario) 
+        (codigo, id_categoria, nome, descricao, preco_unitario, quantidade_disponivel, quantidade_minima) 
         VALUES ($1, $2, $3, $4, $5, $6, $7) 
         RETURNING *
       `;
+
       const valores = [
-        codigo.trim(),
-        catId,
-        nome.trim(),
-        descricao.trim(),
-        qtdEstoque,
-        qtdMinima,
-        preco
+        dados.codigo,
+        dados.id_categoria,
+        dados.nome,
+        dados.descricao,
+        // API usa `valor_unitario`, DB usa `preco_unitario`
+        dados.valor_unitario,
+        // API usa `quantidade_estoque`, DB usa `quantidade_disponivel`
+        dados.quantidade_estoque,
+        dados.quantidade_minima
       ];
 
       const resultado = await pool.query(query, valores);
-      return res.status(201).json(resultado.rows[0]);
+
+      // Mapear resposta do DB para forma esperada pela API (retrocompatibilidade)
+      const row = resultado.rows[0];
+      const resposta = {
+        id_produto: row.id_produto,
+        codigo: row.codigo,
+        id_categoria: row.id_categoria,
+        nome: row.nome,
+        descricao: row.descricao,
+        quantidade_estoque: row.quantidade_disponivel,
+        quantidade_minima: row.quantidade_minima,
+        valor_unitario: Number(row.preco_unitario),
+      };
+
+      return res.status(201).json(resposta);
 
     } catch (erro: any) {
-      // Regra de unicidade (código do produto único)
-      if (erro.code === '23505') {
+      console.error('ProdutoController.criar error:', erro);
+      if (erro && erro.code === '23505') {
         return res.status(400).json({ erro: 'Já existe um produto cadastrado com este código.' });
       }
       return res.status(500).json({ erro: 'Erro interno no servidor.' });
     }
   }
 
-  // GET /produtos - Listar Todos os Produtos
+  // PUT /api/Produtos/:idProduto - Atualizar Produto
+  async atualizar(req: Request, res: Response): Promise<Response> {
+    try {
+      const id = Number(req.params.idProduto);
+
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ erro: 'ID de produto inválido.' });
+      }
+
+      const dados = req.body as AtualizarProdutoDTO;
+
+      // Verifica se o produto existe
+      const produtoExiste = await pool.query(
+        'SELECT id_produto FROM produto WHERE id_produto = $1',
+        [id]
+      );
+
+      if (produtoExiste.rows.length === 0) {
+        return res.status(404).json({ erro: 'Produto não encontrado.' });
+      }
+
+      // Se enviou categoria para atualizar, verifica se ela existe
+      if (dados.id_categoria) {
+        const categoriaExiste = await pool.query(
+          'SELECT id_categoria FROM categoria WHERE id_categoria = $1',
+          [dados.id_categoria]
+        );
+        if (categoriaExiste.rows.length === 0) {
+          return res.status(404).json({ erro: 'A categoria informada não existe.' });
+        }
+      }
+
+      // Mapear campos recebidos (API) para colunas do DB quando necessário
+      const campoMap: Record<string, string> = {
+        quantidade_estoque: 'quantidade_disponivel',
+        valor_unitario: 'preco_unitario',
+      };
+
+      const campos = Object.keys(dados);
+      if (campos.length === 0) {
+        return res.status(400).json({ erro: 'Nenhum campo fornecido para atualização.' });
+      }
+
+      // Substitui nomes de campos pela coluna do DB quando mapeado
+      const setParts = campos.map((campo, index) => {
+        const coluna = campoMap[campo] || campo;
+        return `${coluna} = $${index + 1}`;
+      });
+
+      const setClause = setParts.join(', ');
+      const valores = [...Object.values(dados), id];
+
+      const queryText = `
+        UPDATE produto 
+        SET ${setClause} 
+        WHERE id_produto = $${valores.length} 
+        RETURNING *;
+      `;
+
+      const resultado = await pool.query(queryText, valores);
+
+      // Mapear resposta para formato da API
+      const row = resultado.rows[0];
+      const resposta = {
+        id_produto: row.id_produto,
+        codigo: row.codigo,
+        id_categoria: row.id_categoria,
+        nome: row.nome,
+        descricao: row.descricao,
+        quantidade_estoque: row.quantidade_disponivel ?? row.quantidade_estoque,
+        quantidade_minima: row.quantidade_minima,
+        valor_unitario: Number(row.preco_unitario ?? row.valor_unitario),
+      };
+
+      return res.status(200).json(resposta);
+
+    } catch (erro: any) {
+      console.error('ProdutoController.atualizar error:', erro);
+      if (erro && erro.code === '23505') {
+        return res.status(400).json({ erro: 'Já existe um produto com este código.' });
+      }
+      return res.status(500).json({ erro: 'Erro interno no servidor.' });
+    }
+  }
+
+  // GET /api/Produtos - Listar todos os produtos
   async listar(req: Request, res: Response): Promise<Response> {
     try {
       const query = `
@@ -109,16 +162,31 @@ export class ProdutoController {
         ORDER BY p.id_produto ASC
       `;
       const resultado = await pool.query(query);
-      return res.status(200).json(resultado.rows);
-    } catch (erro) {
+
+      // Mapear colunas do DB para formato da API
+      const rows = resultado.rows.map((row: any) => ({
+        id_produto: row.id_produto,
+        codigo: row.codigo,
+        id_categoria: row.id_categoria,
+        nome: row.nome,
+        descricao: row.descricao,
+        quantidade_estoque: row.quantidade_disponivel,
+        quantidade_minima: row.quantidade_minima,
+        valor_unitario: Number(row.preco_unitario),
+        categoria_nome: row.categoria_nome,
+      }));
+
+      return res.status(200).json(rows);
+    } catch (erro: any) {
+      console.error('ProdutoController.listar error:', erro);
       return res.status(500).json({ erro: 'Erro interno no servidor.' });
     }
   }
 
-  // GET /produtos/:id - Buscar Produto por ID (Conferir se existe)
+  // GET /api/Produtos/:idProduto - Buscar Produto por ID
   async buscarPorId(req: Request, res: Response): Promise<Response> {
     try {
-      const id = Number(req.params.id);
+      const id = Number(req.params.idProduto);
 
       if (!Number.isInteger(id) || id <= 0) {
         return res.status(400).json({ erro: 'ID de produto inválido.' });
@@ -130,8 +198,21 @@ export class ProdutoController {
         return res.status(404).json({ erro: 'Produto não encontrado.' });
       }
 
-      return res.status(200).json(resultado.rows[0]);
-    } catch (erro) {
+      const row = resultado.rows[0];
+      const resposta = {
+        id_produto: row.id_produto,
+        codigo: row.codigo,
+        id_categoria: row.id_categoria,
+        nome: row.nome,
+        descricao: row.descricao,
+        quantidade_estoque: row.quantidade_disponivel,
+        quantidade_minima: row.quantidade_minima,
+        valor_unitario: Number(row.preco_unitario),
+      };
+
+      return res.status(200).json(resposta);
+    } catch (erro: any) {
+      console.error('ProdutoController.buscarPorId error:', erro);
       return res.status(500).json({ erro: 'Erro interno no servidor.' });
     }
   }
