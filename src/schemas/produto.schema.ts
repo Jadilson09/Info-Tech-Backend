@@ -1,36 +1,14 @@
-// src/schemas/produto.schema.ts
 import { z } from 'zod';
 
 export const criarProdutoSchema = z.object({
-  codigo: z.string()
-    .trim()
-    .min(1, 'O código é obrigatório.')
-    .max(50, 'O código deve ter no máximo 50 caracteres.'),
-
-  id_categoria: z.number({ message: 'O id_categoria deve ser um número.' })
-    .int('O id_categoria deve ser um número inteiro.')
-    .positive('O id_categoria deve ser maior que zero.'),
-
-  nome: z.string()
-    .trim()
-    .min(1, 'O nome é obrigatório.')
-    .max(100, 'O nome deve ter no máximo 100 caracteres.'),
-
-  descricao: z.string()
-    .trim()
-    .min(1, 'A descrição é obrigatória.')
-    .max(100, 'A descrição deve ter no máximo 100 caracteres.'),
-
-  quantidade_estoque: z.number({ message: 'A quantidade de estoque deve ser um número.' })
-    .int('A quantidade de estoque deve ser um número inteiro.')
-    .nonnegative('A quantidade de estoque não pode ser negativa.'),
-
-  quantidade_minima: z.number({ message: 'A quantidade mínima deve ser um número.' })
-    .int('A quantidade mínima deve ser um número inteiro.')
-    .nonnegative('A quantidade mínima não pode ser negativa.'),
-
-  valor_unitario: z.number({ message: 'O valor unitário deve ser um número.' })
-    .positive('O valor unitário deve ser maior que zero.'),
+  codigo: z.string().trim().min(1, 'Código é obrigatório.'),
+  id_categoria: z.number().int().positive('ID da categoria inválido.'),
+  nome: z.string().trim().min(1, 'Nome é obrigatório.').max(100),
+  descricao: z.string().trim().optional(),
+  valor_unitario: z.number().positive('O valor unitário deve ser positivo.'),
+  quantidade_estoque: z.number().int().min(0, 'Quantidade não pode ser negativa.'),
+  quantidade_minima: z.number().int().min(0, 'Quantidade mínima não pode ser negativa.'),
+  ativo: z.boolean().optional(),
 });
 
 export const atualizarProdutoSchema = criarProdutoSchema.partial();
