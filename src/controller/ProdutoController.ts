@@ -7,7 +7,7 @@ export class ProdutoController {
   // POST /api/Produtos - Cadastrar Produto
   async criar(req: Request, res: Response): Promise<Response> {
     try {
-      const dados = req.body as CriarProdutoDTO;
+      const dados = req.body as CriarProdutoDTO & { ativo?: boolean };
 
       const categoriaExiste = await pool.query(
         'SELECT id_categoria FROM categoria WHERE id_categoria = $1',
@@ -20,19 +20,20 @@ export class ProdutoController {
 
       const query = `
         INSERT INTO produto 
-        (codigo, id_categoria, nome, descricao, preco_unitario, quantidade_disponivel, quantidade_minima) 
-        VALUES ($1, $2, $3, $4, $5, $6, $7) 
+        (codigo, id_categoria, nome, descricao, preco_unitario, quantidade_disponivel, quantidade_minima, ativo) 
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
         RETURNING *
       `;
 
       const valores = [
-        dados.codigo,
+        dados.codigo.trim(),
         dados.id_categoria,
-        dados.nome,
-        dados.descricao,
+        dados.nome.trim(),
+        dados.descricao ? dados.descricao.trim() : null,
         dados.valor_unitario,
         dados.quantidade_estoque,
-        dados.quantidade_minima
+        dados.quantidade_minima,
+        dados.ativo ?? true,
       ];
 
       const resultado = await pool.query(query, valores);
@@ -47,13 +48,20 @@ export class ProdutoController {
         quantidade_estoque: row.quantidade_disponivel,
         quantidade_minima: row.quantidade_minima,
         valor_unitario: Number(row.preco_unitario),
+        ativo: row.ativo,
       });
 
     } catch (erro: any) {
       console.error('ProdutoController.criar error:', erro);
+
       if (erro && erro.code === '23505') {
         return res.status(400).json({ erro: 'Já existe um produto cadastrado com este código.' });
       }
+
+      if (erro && erro.code === '23514') {
+        return res.status(400).json({ erro: 'Valores inválidos. Preço e quantidades não podem ser negativos.' });
+      }
+
       return res.status(500).json({ erro: 'Erro interno no servidor.' });
     }
   }
@@ -67,7 +75,7 @@ export class ProdutoController {
         return res.status(400).json({ erro: 'ID de produto inválido.' });
       }
 
-      const dados = req.body as AtualizarProdutoDTO;
+      const dados = req.body as AtualizarProdutoDTO & { ativo?: boolean };
 
       const produtoExiste = await pool.query(
         'SELECT id_produto FROM produto WHERE id_produto = $1',
@@ -88,28 +96,39 @@ export class ProdutoController {
         }
       }
 
-      const campoMap: Record<string, string> = {
+      // Mapeamento de campos da API/DTO para colunas do Banco de Dados
+      const mapaColunas: Record<string, string> = {
+        codigo: 'codigo',
+        id_categoria: 'id_categoria',
+        nome: 'nome',
+        descricao: 'descricao',
         quantidade_estoque: 'quantidade_disponivel',
+        quantidade_minima: 'quantidade_minima',
         valor_unitario: 'preco_unitario',
+        ativo: 'ativo',
       };
 
-      const campos = Object.keys(dados);
-      if (campos.length === 0) {
-        return res.status(400).json({ erro: 'Nenhum campo fornecido para atualização.' });
+      const setParts: string[] = [];
+      const valores: any[] = [];
+      let index = 1;
+
+      for (const key of Object.keys(dados)) {
+        if (mapaColunas[key] !== undefined && (dados as any)[key] !== undefined) {
+          setParts.push(`${mapaColunas[key]} = $${index}`);
+          valores.push((dados as any)[key]);
+          index++;
+        }
       }
 
-      const setParts = campos.map((campo, index) => {
-        const coluna = campoMap[campo] || campo;
-        return `${coluna} = $${index + 1}`;
-      });
+      if (setParts.length === 0) {
+        return res.status(400).json({ erro: 'Nenhum campo válido fornecido para atualização.' });
+      }
 
-      const setClause = setParts.join(', ');
-      const valores = [...Object.values(dados), id];
-
+      valores.push(id);
       const queryText = `
         UPDATE produto 
-        SET ${setClause} 
-        WHERE id_produto = $${valores.length} 
+        SET ${setParts.join(', ')} 
+        WHERE id_produto = $${index} 
         RETURNING *;
       `;
 
@@ -122,16 +141,23 @@ export class ProdutoController {
         id_categoria: row.id_categoria,
         nome: row.nome,
         descricao: row.descricao,
-        quantidade_estoque: row.quantidade_disponivel ?? row.quantidade_estoque,
+        quantidade_estoque: row.quantidade_disponivel,
         quantidade_minima: row.quantidade_minima,
-        valor_unitario: Number(row.preco_unitario ?? row.valor_unitario),
+        valor_unitario: Number(row.preco_unitario),
+        ativo: row.ativo,
       });
 
     } catch (erro: any) {
       console.error('ProdutoController.atualizar error:', erro);
+
       if (erro && erro.code === '23505') {
         return res.status(400).json({ erro: 'Já existe um produto com este código.' });
       }
+
+      if (erro && erro.code === '23514') {
+        return res.status(400).json({ erro: 'Valores inválidos. Preço e quantidades não podem ser negativos.' });
+      }
+
       return res.status(500).json({ erro: 'Erro interno no servidor.' });
     }
   }
@@ -156,6 +182,7 @@ export class ProdutoController {
         quantidade_estoque: row.quantidade_disponivel,
         quantidade_minima: row.quantidade_minima,
         valor_unitario: Number(row.preco_unitario),
+        ativo: row.ativo,
         categoria_nome: row.categoria_nome,
       }));
 
@@ -197,6 +224,7 @@ export class ProdutoController {
         quantidade_estoque: row.quantidade_disponivel,
         quantidade_minima: row.quantidade_minima,
         valor_unitario: Number(row.preco_unitario),
+        ativo: row.ativo,
         categoria_nome: row.categoria_nome,
       });
     } catch (erro: any) {
@@ -223,6 +251,14 @@ export class ProdutoController {
       return res.status(200).json({ mensagem: 'Produto removido com sucesso.' });
     } catch (erro: any) {
       console.error('ProdutoController.deletar error:', erro);
+
+      // Captura a tentativa de exclusão de produtos vinculados a movimentações
+      if (erro && erro.code === '23503') {
+        return res.status(400).json({
+          erro: 'Este produto possui histórico de movimentações e não pode ser excluído. Em vez disso, altere o status para inativo (ativo = false).'
+        });
+      }
+
       return res.status(500).json({ erro: 'Erro interno no servidor ao tentar deletar produto.' });
     }
   }
