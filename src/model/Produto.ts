@@ -1,39 +1,39 @@
 import { pool } from '../config/index.js';
 
-// Interface do Objeto Produto
 export interface IProduto {
   id_produto?: number;
   codigo: string;
   id_categoria: number;
   nome: string;
-  descricao: string;
+  descricao?: string;
   quantidade_estoque: number;
   quantidade_minima: number;
   valor_unitario: number;
+  ativo?: boolean;
 }
 
 export class ProdutoModel {
   async criar(produto: IProduto): Promise<IProduto> {
-    // Inserir usando nomes de colunas reais do banco e manter compatibilidade na resposta
     const query = `
       INSERT INTO produto 
-      (codigo, id_categoria, nome, descricao, preco_unitario, quantidade_disponivel, quantidade_minima) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7) 
+      (codigo, id_categoria, nome, descricao, preco_unitario, quantidade_disponivel, quantidade_minima, ativo) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
       RETURNING *
     `;
     const valores = [
       produto.codigo.trim(),
       produto.id_categoria,
       produto.nome.trim(),
-      produto.descricao.trim(),
+      produto.descricao ? produto.descricao.trim() : null,
       produto.valor_unitario,
       produto.quantidade_estoque,
-      produto.quantidade_minima
+      produto.quantidade_minima,
+      produto.ativo ?? true
     ];
 
     const resultado = await pool.query(query, valores);
     const row = resultado.rows[0];
-    // Normalizar para formato usado pela API
+
     return {
       id_produto: row.id_produto,
       codigo: row.codigo,
@@ -43,6 +43,7 @@ export class ProdutoModel {
       quantidade_estoque: row.quantidade_disponivel,
       quantidade_minima: row.quantidade_minima,
       valor_unitario: Number(row.preco_unitario),
+      ativo: row.ativo,
     };
   }
 
@@ -54,7 +55,7 @@ export class ProdutoModel {
       ORDER BY p.id_produto ASC
     `;
     const resultado = await pool.query(query);
-    // Normalizar colunas do DB para formato da API
+
     return resultado.rows.map((row: any) => ({
       id_produto: row.id_produto,
       codigo: row.codigo,
@@ -64,6 +65,7 @@ export class ProdutoModel {
       quantidade_estoque: row.quantidade_disponivel,
       quantidade_minima: row.quantidade_minima,
       valor_unitario: Number(row.preco_unitario),
+      ativo: row.ativo,
     }));
   }
 
@@ -71,7 +73,9 @@ export class ProdutoModel {
     const query = 'SELECT * FROM produto WHERE id_produto = $1';
     const resultado = await pool.query(query, [id]);
     const row = resultado.rows[0];
+
     if (!row) return null;
+
     return {
       id_produto: row.id_produto,
       codigo: row.codigo,
@@ -81,6 +85,7 @@ export class ProdutoModel {
       quantidade_estoque: row.quantidade_disponivel,
       quantidade_minima: row.quantidade_minima,
       valor_unitario: Number(row.preco_unitario),
+      ativo: row.ativo,
     };
   }
 }
