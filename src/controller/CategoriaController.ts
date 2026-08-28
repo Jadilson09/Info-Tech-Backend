@@ -21,7 +21,7 @@ export class CategoriaController {
       }
 
       if (nome.trim().length > 80) {
-        return res.status(400).json({ erro: 'O nome da categoria deve ter no máximo 80 caracteres.' });
+        return res.status(400).json({ erro: 'O nome de categorias deve ter no máximo 80 caracteres.' });
       }
 
       // 3. Inserção no banco
