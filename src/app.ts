@@ -1,24 +1,20 @@
-import { DatabaseModel } from "./model/DatabaseModel.js";
-import { server } from "./server.js";
 import express from 'express';
 import cors from 'cors';
+import router from './routes.js';
 
 const app = express();
 
-app.use(cors()); 
+app.use(cors());
 app.use(express.json());
+app.use('/api', router);
 
-const port: number = Number(process.env.PORT) || 3333; //Define a porta que o servidor vai executar
-
-// Testa conexão com o banco e inicia o servidor apenas uma vez
-new DatabaseModel().testeConexao().then((resbd) => {
-    if (resbd) {
-        console.log('Conexão com o banco estabelecida');
-    } else {
-        console.log('Não foi possível conectar ao banco de dados (continuando sem DB)');
-    }
-
-    server.listen(port, () => {
-        console.log(`Servidor executando no endereço: http://localhost:${port}`);
-    });
+// Middleware de tratamento global de erros
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  if (err instanceof SyntaxError && 'body' in err) {
+    return res.status(400).json({ erro: 'JSON malformatado enviado na requisição.' });
+  }
+  console.error('Unhandled Server Error:', err);
+  return res.status(500).json({ erro: 'Erro interno no servidor.' });
 });
+
+export default app;

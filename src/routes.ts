@@ -1,33 +1,40 @@
-import type { Request, Response } from "express";
-import { Router } from "express";
+import { Router } from 'express';
+import CategoriaController from './controller/CategoriaController.js';
+import ProdutoController from './controller/ProdutoController.js';
+import MovimentacaoController from './controller/MovimentacaoController.js';
+import RelatorioController from './controller/RelatorioController.js';
 
-import CategoriaController from "./controller/CategoriaController.js";
-import MovimentacaoController from "./controller/MovimentacaoController.js";
-import ProdutoController from "./controller/ProdutoController.js";
-
-import { validate } from "./middlewares/validate.js";
-import { criarProdutoSchema, atualizarProdutoSchema } from "./schemas/produto.schema.js";
+import { validarSchema } from './middlewares/validate.js';
+import { criarCategoriaSchema, atualizarCategoriaSchema } from './schemas/categoria.schema.js';
+import { criarProdutoSchema, atualizarProdutoSchema } from './schemas/produto.schema.js';
+import { criarMovimentacaoSchema } from './schemas/movimentacao.schema.js';
 
 const router = Router();
 
-router.get("/api", (req: Request, res: Response) => {
-  res.status(200).json({ mensagem: "Olá, seja bem-vindo!" });
-});
-
-// Movimentações
-router.get("/api/Movimentacoes", MovimentacaoController.listar);
-router.post("/api/Movimentacoes", MovimentacaoController.criar);
-
 // Categorias
-router.get("/api/Categorias", CategoriaController.listar);
-router.post("/api/Categorias", CategoriaController.criar);
-router.get("/api/Categorias/:idCategoria", CategoriaController.buscarPorId);
+router.post('/categorias', validarSchema(criarCategoriaSchema), (req, res) => CategoriaController.criar(req, res));
+router.get('/categorias', (req, res) => CategoriaController.listar(req, res));
+router.get('/categorias/:id', (req, res) => CategoriaController.buscarPorId(req, res));
+router.put('/categorias/:id', validarSchema(atualizarCategoriaSchema), (req, res) => CategoriaController.atualizar(req, res));
+router.delete('/categorias/:idCategoria', (req, res) => CategoriaController.deletar(req, res));
 
 // Produtos
-router.get("/api/Produtos", (req, res) => ProdutoController.listar(req, res));
-router.post("/api/Produtos", validate(criarProdutoSchema), (req, res) => ProdutoController.criar(req, res));
-router.get("/api/Produtos/:idProduto", (req, res) => ProdutoController.buscarPorId(req, res));
-router.put("/api/Produtos/:idProduto", validate(atualizarProdutoSchema), (req, res) => ProdutoController.atualizar(req, res));
-router.delete("/api/Produtos/:idProduto", (req, res) => ProdutoController.deletar(req, res));
+router.post('/produtos', validarSchema(criarProdutoSchema), (req, res) => ProdutoController.criar(req, res));
+router.get('/produtos', (req, res) => ProdutoController.listar(req, res));
+router.get('/produtos/:idProduto', (req, res) => ProdutoController.buscarPorId(req, res));
+router.put('/produtos/:idProduto', validarSchema(atualizarProdutoSchema), (req, res) => ProdutoController.atualizar(req, res));
+router.delete('/produtos/:idProduto', (req, res) => ProdutoController.deletar(req, res));
 
-export { router };
+// Movimentações
+router.post('/movimentacoes', validarSchema(criarMovimentacaoSchema), (req, res) => MovimentacaoController.criar(req, res));
+router.get('/movimentacoes', (req, res) => MovimentacaoController.listar(req, res));
+router.get('/movimentacoes/:idMovimentacao', (req, res) => MovimentacaoController.buscarPorId(req, res));
+router.put('/movimentacoes/:idMovimentacao', (req, res) => MovimentacaoController.atualizar(req, res));
+router.delete('/movimentacoes/:idMovimentacao', (req, res) => MovimentacaoController.deletar(req, res));
+
+// Relatórios
+router.get('/relatorios/reposicao', (req, res) => RelatorioController.produtosReposicao(req, res));
+router.get('/relatorios/valor-produtos', (req, res) => RelatorioController.valorProdutoEstoque(req, res));
+router.get('/relatorios/valor-total', (req, res) => RelatorioController.valorTotalEstoque(req, res));
+
+export default router;
