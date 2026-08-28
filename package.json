@@ -14,16 +14,16 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/senai-661/FiveBits-backend.git"
+    "url": "git+https://github.com/Jadilson09/Info-Tech-Backend"
   },
   "keywords": [],
-  "author": "FiveBits",
+  "author": "Jadson",
   "license": "ISC",
   "type": "module",
   "bugs": {
-    "url": "https://github.com/senai-661/FiveBits-backend/issues"
+    "url": "https://github.com/Jadilson09/Info-Tech-Backend/issues"
   },
-  "homepage": "https://github.com/senai-661/FiveBits-backend#readme",
+  "homepage": "https://github.com/Jadilson09/Info-Tech-Backend#readme",
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/dotenv": "^6.1.1",
@@ -33,6 +33,7 @@
     "@types/pg": "^8.16.0",
     "nodemon": "^3.1.14",
     "ts-node": "^10.9.2",
+    "tsx": "^4.23.12",
     "typescript": "^5.9.3"
   },
   "dependencies": {
